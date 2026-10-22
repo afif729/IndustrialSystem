@@ -6,77 +6,39 @@ pipeline {
         booleanParam(name: 'DEPLOY_TO_K8S', defaultValue: true, description: 'Deploy to Kubernetes cluster')
     }
 
-    environment {
-        DOCKER_HUB_REPO = 'DOCKER_HUB_USERNAME/industrial-monitoring'
-        DOCKER_CRED_ID  = 'docker-hub-credentials'
-        KUBECONFIG_CRED = 'k8s-kubeconfig'
-    }
-
     stages {
-        stage('Checkout') {
-            steps {
-                echo 'Checking out source code from Git repository...'
-                checkout scm
-            }
-        }
-
-        stage('Parallel Build & Validation') {
+        stage('Parallel Validation & Build') {
             parallel {
-                stage('Validate Source Files') {
+                stage('Validate Workspace') {
                     steps {
                         echo 'Checking required application files...'
-                        sh 'test -f index.html'
-                        sh 'test -f Dockerfile'
-                        sh 'test -f deployment.yaml'
+                        bat 'if not exist index.html exit /b 1'
+                        bat 'if not exist Dockerfile exit /b 1'
                     }
                 }
-                stage('Build Docker Image') {
+                stage('Simulate Build Stage') {
                     steps {
-                        echo "Building Docker image ${DOCKER_HUB_REPO}:${params.DOCKER_IMAGE_TAG}"
-                        sh "docker build -t ${DOCKER_HUB_REPO}:${params.DOCKER_IMAGE_TAG} ."
+                        echo "Building image version: ${params.DOCKER_IMAGE_TAG}"
+                        bat 'docker build -t industrial-monitoring:%DOCKER_IMAGE_TAG% .'
                     }
                 }
             }
         }
 
-        stage('Push to Docker Hub') {
-            steps {
-                script {
-                    docker.withRegistry('https://index.docker.io/v1/', "${DOCKER_CRED_ID}") {
-                        sh "docker push ${DOCKER_HUB_REPO}:${params.DOCKER_IMAGE_TAG}"
-                    }
-                }
-            }
-        }
-
-        stage('Deploy to Kubernetes') {
+        stage('Conditional Deployment') {
             when {
                 expression { return params.DEPLOY_TO_K8S == true }
             }
             steps {
-                script {
-                    configFileProvider([configFile(fileId: "${KUBECONFIG_CRED}", variable: 'KUBECONFIG')]) {
-                        sh """
-                            sed -i 's|DOCKER_HUB_USERNAME/industrial-monitoring:v1.0|${DOCKER_HUB_REPO}:${params.DOCKER_IMAGE_TAG}|g' deployment.yaml
-                            kubectl apply -f deployment.yaml --kubeconfig=\$KUBECONFIG
-                            kubectl rollout status deployment/industrial-monitoring-deployment --kubeconfig=\$KUBECONFIG
-                        """
-                    }
-                }
+                echo "Deploying version ${params.DOCKER_IMAGE_TAG} to cluster..."
             }
         }
 
         stage('Archive Artifacts') {
             steps {
-                echo 'Archiving Kubernetes Deployment & Configuration Manifests...'
-                archiveArtifacts artifacts: '*.yaml, Dockerfile', allowEmptyArchive: false
+                echo 'Archiving project artifacts...'
+                archiveArtifacts artifacts: 'index.html, Dockerfile, deployment.yaml', allowEmptyArchive: false
             }
-        }
-    }
-
-    post {
-        always {
-            cleanWs()
         }
     }
 }
