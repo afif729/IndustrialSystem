@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Industrial Predictive Maintenance & Equipment Monitoring</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        background-color: #f4f7f6;
+      }
+      h1,
+      h2 {
+        color: #333;
+      }
+      .stats-container {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 20px;
+      }
+      .card {
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        flex: 1;
+      }
+      .card.alert {
+        border-left: 5px solid #e74c3c;
+      }
+      .filters {
+        margin-bottom: 20px;
+      }
+      select {
+        padding: 8px;
+        margin-right: 10px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+        margin-bottom: 25px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      }
+      th,
+      td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+      }
+      th {
+        background-color: #2c3e50;
+        color: white;
+      }
+      .status-Operational {
+        color: green;
+        font-weight: bold;
+      }
+      .status-Warning {
+        color: orange;
+        font-weight: bold;
+      }
+      .status-Critical {
+        color: red;
+        font-weight: bold;
+      }
+      .warning-bg {
+        background-color: #ffe6e6;
+      }
+      .high-risk {
+        font-weight: bold;
+        color: #c0392b;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Industrial Equipment Monitoring Dashboard</h1>
+
+    <!-- Analytics Cards -->
+    <div class="stats-container">
+      <div class="card">
+        <h3>Operational Machines</h3>
+        <p id="total-operational">0</p>
+      </div>
+      <div class="card">
+        <h3>Total Downtime (Hours)</h3>
+        <p id="total-downtime">0</p>
+      </div>
+      <div class="card alert">
+        <h3>Highest Maintenance Risk</h3>
+        <p id="highest-risk">None</p>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters">
+      <label>Filter by Status: </label>
+      <select id="filter-status" onchange="renderDashboard()">
+        <option value="All">All</option>
+        <option value="Operational">Operational</option>
+        <option value="Warning">Warning</option>
+        <option value="Critical">Critical</option>
+      </select>
+
+      <label>Filter by Production Unit: </label>
+      <select id="filter-unit" onchange="renderDashboard()">
+        <option value="All">All</option>
+        <option value="Unit A">Unit A</option>
+        <option value="Unit B">Unit B</option>
+        <option value="Unit C">Unit C</option>
+      </select>
+    </div>
+
+    <!-- Equipment Table -->
+    <h2>Equipment Overview</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Machine ID</th>
+          <th>Production Unit</th>
+          <th>Operating Hours</th>
+          <th>Temperature (°C)</th>
+          <th>Vibration Level (mm/s)</th>
+          <th>Status</th>
+          <th>Maintenance Due</th>
+          <th>Recent Downtime (hrs)</th>
+        </tr>
+      </thead>
+      <tbody id="equipment-table"></tbody>
+    </table>
+
+    <!-- Predictive Maintenance Priority Table -->
+    <h2>Maintenance Priority & Actions</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Machine ID</th>
+          <th>Severity</th>
+          <th>Issue / Trigger</th>
+          <th>Recommended Action</th>
+        </tr>
+      </thead>
+      <tbody id="maintenance-table"></tbody>
+    </table>
+
+    <script>
+      // Simulated Equipment Data
+      const machines = [
+        {
+          id: "M-101",
+          unit: "Unit A",
+          hours: 1450,
+          temp: 72,
+          vibration: 2.1,
+          status: "Operational",
+          due: "2026-11-15",
+          downtime: 2.5,
+        },
+        {
+          id: "M-102",
+          unit: "Unit B",
+          hours: 3200,
+          temp: 85,
+          vibration: 4.8,
+          status: "Warning",
+          due: "2026-10-25",
+          downtime: 8.0,
+        },
+        {
+          id: "M-103",
+          unit: "Unit A",
+          hours: 4100,
+          temp: 91,
+          vibration: 6.2,
+          status: "Critical",
+          due: "2026-10-23",
+          downtime: 14.5,
+        },
+        {
+          id: "M-104",
+          unit: "Unit C",
+          hours: 890,
+          temp: 68,
+          vibration: 1.5,
+          status: "Operational",
+          due: "2026-12-01",
+          downtime: 0.0,
+        },
+        {
+          id: "M-105",
+          unit: "Unit C",
+          hours: 2750,
+          temp: 82,
+          vibration: 5.1,
+          status: "Warning",
+          due: "2026-10-28",
+          downtime: 5.2,
+        },
+      ];
+
+      const TEMP_THRESHOLD = 80;
+      const VIB_THRESHOLD = 4.5;
+
+      function renderDashboard() {
+        const statusFilter = document.getElementById("filter-status").value;
+        const unitFilter = document.getElementById("filter-unit").value;
+
+        const tableBody = document.getElementById("equipment-table");
+        const maintBody = document.getElementById("maintenance-table");
+
+        tableBody.innerHTML = "";
+        maintBody.innerHTML = "";
+
+        let operationalCount = 0;
+        let totalDowntime = 0;
+        let highestRiskMachine = null;
+        let maxRiskScore = -1;
+
+        machines.forEach((m) => {
+          // Calculate analytics
+          if (m.status === "Operational") operationalCount++;
+          totalDowntime += m.downtime;
+
+          // Threshold Warning Check
+          const isTempExceeded = m.temp > TEMP_THRESHOLD;
+          const isVibExceeded = m.vibration > VIB_THRESHOLD;
+
+          // Risk Score calculation for predictive maintenance
+          const riskScore =
+            m.temp / TEMP_THRESHOLD + m.vibration / VIB_THRESHOLD;
+          if (riskScore > maxRiskScore) {
+            maxRiskScore = riskScore;
+            highestRiskMachine = m.id;
+          }
+
+          // Filter check
+          if (
+            (statusFilter === "All" || m.status === statusFilter) &&
+            (unitFilter === "All" || m.unit === unitFilter)
+          ) {
+            const rowClass =
+              isTempExceeded || isVibExceeded ? "warning-bg" : "";
+
+            tableBody.innerHTML += `
+                        <tr class="${rowClass}">
+                            <td>${m.id}</td>
+                            <td>${m.unit}</td>
+                            <td>${m.hours}</td>
+                            <td>${m.temp} °C ${isTempExceeded ? "⚠️" : ""}</td>
+                            <td>${m.vibration} mm/s ${isVibExceeded ? "⚠️" : ""}</td>
+                            <td class="status-${m.status}">${m.status}</td>
+                            <td>${m.due}</td>
+                            <td>${m.downtime}</td>
+                        </tr>
+                    `;
+
+            // Generate Predictive Maintenance Row if warning/critical
+            if (isTempExceeded || isVibExceeded || m.status !== "Operational") {
+              let severity = m.status === "Critical" ? "HIGH" : "MEDIUM";
+              let issue = [];
+              if (isTempExceeded) issue.push("Overheating (>80°C)");
+              if (isVibExceeded) issue.push("High Vibration (>4.5 mm/s)");
+
+              let action =
+                severity === "HIGH"
+                  ? "Immediate Shutdown & Bearing Inspection"
+                  : "Schedule Calibration & Lubrication";
+
+              maintBody.innerHTML += `
+                            <tr>
+                                <td class="high-risk">${m.id}</td>
+                                <td><span style="color:${severity === "HIGH" ? "red" : "orange"}">${severity}</span></td>
+                                <td>${issue.join(" & ")}</td>
+                                <td>${action}</td>
+                            </tr>
+                        `;
+            }
+          }
+        });
+
+        document.getElementById("total-operational").innerText =
+          operationalCount;
+        document.getElementById("total-downtime").innerText =
+          totalDowntime.toFixed(1);
+        document.getElementById("highest-risk").innerText = highestRiskMachine
+          ? highestRiskMachine
+          : "None";
+      }
+
+      renderDashboard();
+    </script>
+  </body>
+</html>
