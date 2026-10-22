@@ -21,7 +21,7 @@ spec:
     spec:
       containers:
         - name: monitoring-app
-          image: DOCKER_HUB_USERNAME/industrial-monitoring:v1.0
+          image: afif729/industrial-monitoring:v1.0
           ports:
             - containerPort: 80
           readinessProbe:
